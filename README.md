@@ -1,20 +1,22 @@
 # cc-switch-sync
 
-Windows batch scripts for managing remote Linux servers running [CC Switch](https://github.com/farion1231/cc-switch) — a provider proxy for Claude, Codex, and other AI coding tools.
+在 Windows 本地用 [CC Switch](https://github.com/farion1231/cc-switch) 统一管理远程 Linux 服务器上的 Claude Code / Codex 等 AI 工具配置。
 
-## Scripts
+[English README](README_EN.md)
 
-Double-click any script to run it.
+## 脚本说明
 
-1. **`1. SSH Connect.bat`** — Pick a server from `servers.conf` and open an SSH session.
-2. **`2. Sync Config.bat`** — Copy your local CC Switch provider database (`~/.cc-switch/cc-switch.db`) to the selected server, disable local routing, and restart CC Switch headlessly so it generates fresh `settings.json` / `config.toml` for Claude and Codex.
-3. **`3. Add Server.bat`** — Interactively add a new server entry to `servers.conf` and optionally initialize it (install Xvfb + CC Switch, write proxy/workdir to `.bashrc`, sync DB).
+双击任意脚本即可运行。
 
-`_select-server.bat` is a shared helper used by the scripts above — no need to run it directly.
+1. **`1. SSH Connect.bat`** — 从 `servers.conf` 选择服务器，直接打开 SSH 连接。
+2. **`2. Sync Config.bat`** — 把本地 CC Switch 的 Provider 数据库（`~/.cc-switch/cc-switch.db`）复制到远程服务器，禁用本地路由，然后无头启动 CC Switch，让它自动生成 Claude 的 `settings.json` 和 Codex 的 `config.toml`。
+3. **`3. Add Server.bat`** — 交互式添加新服务器到 `servers.conf`，可选择立即初始化（安装 Xvfb + CC Switch、写入代理/工作目录到 `.bashrc`、同步 DB）。
 
-## `servers.conf` format
+`_select-server.bat` 是上面脚本共用的服务器选择器，不需要单独运行。
 
-SSH config style. Copy `servers.conf.example` to `servers.conf` and fill in your values.
+## `servers.conf` 格式
+
+SSH config 风格。把 `servers.conf.example` 复制为 `servers.conf` 后填入你自己的值。
 
 ```
 Host lab-gpu
@@ -25,52 +27,52 @@ Host lab-gpu
   Proxy http://10.x.x.x:18000
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `Host` | yes | Friendly name shown in the selection menu |
-| `HostName` | yes | IP address or hostname |
-| `Port` | no | SSH port (default: 22) |
-| `User` | no | SSH user (default: root) |
-| `WorkDir` | no | Directory to `cd` into on login |
-| `Proxy` | no | HTTP proxy for the server's outbound traffic |
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `Host` | 是 | 服务器昵称，显示在选择菜单里 |
+| `HostName` | 是 | IP 地址或主机名 |
+| `Port` | 否 | SSH 端口（默认 22） |
+| `User` | 否 | SSH 用户（默认 root） |
+| `WorkDir` | 否 | 登录后自动 `cd` 到这个目录 |
+| `Proxy` | 否 | 该服务器对外访问时使用的 HTTP 代理 |
 
-`servers.conf` is in `.gitignore` — it never gets committed.
+`servers.conf` 已加入 `.gitignore`，不会被提交到 git。
 
-## One-time remote setup
+## 远程服务器一次性初始化
 
-`3. Add Server.bat` handles this automatically, but if you prefer to do it manually:
+`3. Add Server.bat` 会自动完成初始化，如果你想手动操作：
 
 ```bash
-# Install Xvfb (required to run CC Switch headlessly)
+# 安装 Xvfb（无头运行 CC Switch 必需）
 apt-get install -y xvfb
 
-# Download and install CC Switch
+# 下载并安装 CC Switch
 wget https://github.com/farion1231/cc-switch/releases/download/v3.14.1/CC-Switch-v3.14.1-Linux-amd64.deb -O /tmp/cc-switch.deb
 apt install -y /tmp/cc-switch.deb
 ```
 
-## Critical: disable local proxy routing in CC Switch
+## 重要：关闭本地代理路由
 
-Before syncing, open CC Switch on **Windows**, go to **Settings**, and make sure:
+同步前，在 **Windows 本地**打开 CC Switch → **Settings**，确认：
 
 ```
 enableLocalProxy = off
 ```
 
-This prevents CC Switch from injecting a local proxy URL into the generated config. The server reads the config literally, so a `localhost:…` proxy address would fail on the remote machine.
+如果开着本地代理，CC Switch 会把 `localhost:…` 写进生成的配置文件，远程服务器根本访问不到这个地址，导致 Claude / Codex 连不上。
 
-The sync script also enforces this by running:
+同步脚本也会在复制数据库后自动执行以下 SQL 来强制关闭：
+
 ```sql
 UPDATE proxy_config SET is_enabled = 0
 ```
-on the copied database before restarting CC Switch.
 
-## SSH key permissions (Windows)
+## SSH 密钥权限问题（Windows）
 
-If SSH refuses your key with a permissions error, fix it with `icacls`:
+如果 SSH 报权限错误，用 `icacls` 修复：
 
 ```cmd
-icacls "C:\Users\YourName\.ssh\id_rsa" /inheritance:r /grant:r "%USERNAME%:R"
+icacls "C:\Users\你的用户名\.ssh\id_rsa" /inheritance:r /grant:r "%USERNAME%:R"
 ```
 
 ## License
