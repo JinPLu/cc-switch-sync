@@ -1,0 +1,19 @@
+# Never commit the CC Switch database — it contains plaintext API keys
+*.db
+*.db-shm
+*.db-wal
+
+# Local server registry — contains hostnames/IPs that may be private
+servers.json
+.cc-switch-sync/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
