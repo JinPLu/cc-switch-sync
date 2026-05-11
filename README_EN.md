@@ -4,30 +4,10 @@ Companion scripts for [CC Switch](https://github.com/farion1231/cc-switch) — d
 
 [中文](README.md)
 
-## Quick Start
+## One-time setup
 
-### Step 1: One-time setup
-
-**Local (Windows)**
-
-1. Install [CC Switch](https://github.com/farion1231/cc-switch/releases) and configure a Provider (API Key + Base URL)
-2. Settings → disable `enableLocalProxy` (otherwise remote servers receive a `localhost` address that won't work)
-
-**Remote server** (`3. Add Server.bat` can do this automatically)
-
-```bash
-apt-get install -y xvfb
-wget https://github.com/farion1231/cc-switch/releases/download/v3.14.1/CC-Switch-v3.14.1-Linux-amd64.deb -O /tmp/cc.deb
-apt install -y /tmp/cc.deb
-```
-
-### Step 2: Clone and fill in your server list
-
-```bash
-git clone https://github.com/JinPLu/cc-switch-sync.git
-```
-
-Copy `servers.conf.example` to `servers.conf` and fill in your server details.
+1. Install [CC Switch](https://github.com/farion1231/cc-switch/releases), add a Provider (API Key + Base URL) in the GUI, and disable `enableLocalProxy` in Settings
+2. Copy `servers.conf.example` to `servers.conf` and fill in your server details
 
 ## Usage
 
@@ -35,9 +15,8 @@ Double-click a script to run it:
 
 | Script | What it does |
 |--------|--------------|
-| `1. SSH Connect.bat` | SSH into a server |
-| `2. Sync Config.bat` | Push current Provider config to a server |
-| `3. Add Server.bat` | Add a new server (with optional auto-init) |
+| `1. SSH Connect.bat` | Connect to a server. First time: pick "+ Add new server" and the script will automatically initialize the remote environment (install deps, sync config), then connect |
+| `2. Sync Config.bat` | After switching Provider in CC Switch, push the new config to the server |
 
 ## `servers.conf` format
 
@@ -50,7 +29,16 @@ Host my-server
   Proxy http://10.0.0.2:18000
 ```
 
-`WorkDir` and `Proxy` are optional. `servers.conf` is in `.gitignore` and never committed.
+| Field | Required | Description |
+|-------|----------|-------------|
+| `Host` | yes | Friendly name shown in menus |
+| `HostName` | yes | IP address or hostname |
+| `Port` | no | SSH port (default: 22) |
+| `User` | no | SSH user (default: root) |
+| `WorkDir` | no | Directory to `cd` into on login |
+| `Proxy` | no | HTTP proxy for the server's outbound traffic |
+
+`servers.conf` is in `.gitignore` and never committed.
 
 ## License
 

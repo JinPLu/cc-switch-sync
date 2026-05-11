@@ -52,7 +52,7 @@ set /p CHOICE="  Select [1-!ADDNUM!]: "
 REM Check if user chose "Add new server"
 if "!CHOICE!"=="!ADDNUM!" (
     endlocal
-    call "%~dp03. Add Server.bat"
+    call "%~dp0_add-server.bat"
     exit /b 2
 )
 
