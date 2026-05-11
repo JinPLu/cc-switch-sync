@@ -6,8 +6,9 @@ echo   SSH Connect
 echo =============================================
 echo.
 
+:select
 call "%~dp0_select-server.bat"
-if errorlevel 2 exit /b 0
+if errorlevel 2 goto select
 if "%SVR_HOST%"=="" (
     echo   [ERROR] No server selected.
     pause

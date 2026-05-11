@@ -37,7 +37,7 @@ echo   OK.
 
 echo.
 echo [2/3] Applying config (7s) ...
-ssh -p %SVR_PORT% %SVR_USER%@%SVR_HOST% "python3 -c \"import sqlite3;c=sqlite3.connect('/root/.cc-switch/cc-switch.db');c.execute('UPDATE proxy_config SET is_enabled=0');c.commit();c.close();print('  Local Routing disabled')\" 2>/dev/null; pkill cc-switch 2>/dev/null; sleep 1; xvfb-run --auto-servernum cc-switch >/tmp/cc-switch-sync.log 2>&1 & sleep 7; pkill cc-switch 2>/dev/null"
+ssh -p %SVR_PORT% %SVR_USER%@%SVR_HOST% "python3 -c \"import os,sqlite3;c=sqlite3.connect(os.path.expanduser('~/.cc-switch/cc-switch.db'));c.execute('UPDATE proxy_config SET is_enabled=0');c.commit();c.close();print('  Local Routing disabled')\" 2>/dev/null; pkill cc-switch 2>/dev/null; sleep 1; xvfb-run --auto-servernum cc-switch >/tmp/cc-switch-sync.log 2>&1 & sleep 7; pkill cc-switch 2>/dev/null"
 echo   OK.
 
 echo.

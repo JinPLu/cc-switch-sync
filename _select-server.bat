@@ -9,9 +9,10 @@ setlocal enabledelayedexpansion
 set "CONF=%~dp0servers.conf"
 
 if not exist "!CONF!" (
-    echo   [ERROR] servers.conf not found: !CONF!
-    endlocal
-    exit /b 1
+    echo   No servers configured yet. Let's add one now.
+    echo.
+    call "%~dp0_add-server.bat"
+    exit /b 2
 )
 
 set /a COUNT=0
@@ -33,9 +34,10 @@ for /f "usebackq tokens=1,* delims= " %%a in ("!CONF!") do (
 )
 
 if !COUNT!==0 (
-    echo   [ERROR] No servers defined in servers.conf
-    endlocal
-    exit /b 1
+    echo   No servers found in servers.conf. Let's add one now.
+    echo.
+    call "%~dp0_add-server.bat"
+    exit /b 2
 )
 
 echo   Available servers:

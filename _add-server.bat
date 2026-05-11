@@ -11,8 +11,12 @@ set "LOCAL_DB=%USERPROFILE%\.cc-switch\cc-switch.db"
 
 echo   Current servers:
 echo   ------------------
-for /f "usebackq tokens=1,* delims= " %%a in ("!CONF!") do (
-    if /i "%%a"=="Host" echo   - %%b
+if exist "!CONF!" (
+    for /f "usebackq tokens=1,* delims= " %%a in ("!CONF!") do (
+        if /i "%%a"=="Host" echo   - %%b
+    )
+) else (
+    echo   (none yet)
 )
 echo.
 echo   --- Step 1: Server Info ---
@@ -123,7 +127,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo   DB copied. Generating settings.json (7s) ...
-ssh -p !PORT! !USER!@!HOST! "python3 -c \"import sqlite3;c=sqlite3.connect('/root/.cc-switch/cc-switch.db');c.execute('UPDATE proxy_config SET is_enabled=0');c.commit();c.close();print('  Local Routing disabled')\" 2>/dev/null; pkill cc-switch 2>/dev/null; sleep 1; xvfb-run --auto-servernum cc-switch >/tmp/cc-switch-init.log 2>&1 & sleep 7; pkill cc-switch 2>/dev/null"
+ssh -p !PORT! !USER!@!HOST! "python3 -c \"import os,sqlite3;c=sqlite3.connect(os.path.expanduser('~/.cc-switch/cc-switch.db'));c.execute('UPDATE proxy_config SET is_enabled=0');c.commit();c.close();print('  Local Routing disabled')\" 2>/dev/null; pkill cc-switch 2>/dev/null; sleep 1; xvfb-run --auto-servernum cc-switch >/tmp/cc-switch-init.log 2>&1 & sleep 7; pkill cc-switch 2>/dev/null"
 echo   OK.
 
 echo.
