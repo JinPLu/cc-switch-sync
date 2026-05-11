@@ -1,0 +1,15 @@
+# AI Server list
+# Format follows ~/.ssh/config — add a new server by appending a new block
+
+Host lab-gpu
+  HostName 10.x.x.x
+  Port 22
+  User root
+  WorkDir /home/user/projects/
+  Proxy http://10.x.x.x:18000
+
+Host my-server
+  HostName 10.x.x.x
+  Port 6339
+  User root
+  WorkDir /root/workspace/

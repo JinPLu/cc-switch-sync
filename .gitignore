@@ -3,7 +3,8 @@
 *.db-shm
 *.db-wal
 
-# Local server registry — contains hostnames/IPs that may be private
+# Local server registry — contains real IPs/hostnames and proxy addresses
+servers.conf
 servers.json
 .cc-switch-sync/
 
