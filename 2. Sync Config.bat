@@ -18,31 +18,31 @@ echo.
 echo   Target: %SVR_USER%@%SVR_HOST%:%SVR_PORT%  [%SVR_NAME%]
 echo.
 
-set "LOCAL_DB=%USERPROFILE%\.cc-switch\cc-switch.db"
-if not exist "!LOCAL_DB!" (
-    echo   [ERROR] CC Switch DB not found: !LOCAL_DB!
-    echo   Please install CC Switch and configure a Provider first.
+set "LOCAL_SETTINGS=%USERPROFILE%\.claude\settings.json"
+if not exist "!LOCAL_SETTINGS!" (
+    echo   [ERROR] Local settings.json not found: !LOCAL_SETTINGS!
     pause
     exit /b 1
 )
 
-echo [1/3] Copying CC Switch DB ...
-scp -P %SVR_PORT% "%LOCAL_DB%" %SVR_USER%@%SVR_HOST%:~/.cc-switch/cc-switch.db
+echo [1/2] Merging local env into remote settings.json ...
+scp -P %SVR_PORT% "%LOCAL_SETTINGS%" %SVR_USER%@%SVR_HOST%:/tmp/cc-sync-local.json
 if errorlevel 1 (
     echo   ERROR: SCP failed. Check SSH connection.
     pause
     exit /b 1
 )
+ssh -p %SVR_PORT% %SVR_USER%@%SVR_HOST% "python3 -c \"import json,os; local=json.load(open('/tmp/cc-sync-local.json')); env=local.get('env',{}); path=os.path.expanduser('~/.claude/settings.json'); remote=json.load(open(path)) if os.path.exists(path) else {}; remote['env']=env; os.makedirs(os.path.dirname(path),exist_ok=True); open(path,'w').write(json.dumps(remote,indent=2)); os.remove('/tmp/cc-sync-local.json'); print('  env merged')\""
+if errorlevel 1 (
+    echo   ERROR: SSH merge failed.
+    pause
+    exit /b 1
+)
 echo   OK.
 
 echo.
-echo [2/3] Applying config (7s) ...
-ssh -p %SVR_PORT% %SVR_USER%@%SVR_HOST% "python3 -c \"import os,sqlite3;c=sqlite3.connect(os.path.expanduser('~/.cc-switch/cc-switch.db'));c.execute('UPDATE proxy_config SET is_enabled=0');c.commit();c.close();print('  Local Routing disabled')\" 2>/dev/null; pkill cc-switch 2>/dev/null; sleep 1; xvfb-run --auto-servernum cc-switch >/tmp/cc-switch-sync.log 2>&1 & sleep 7; pkill cc-switch 2>/dev/null"
-echo   OK.
-
-echo.
-echo [3/3] Verifying ...
-ssh -p %SVR_PORT% %SVR_USER%@%SVR_HOST% "echo '  Claude:' && grep ANTHROPIC_BASE_URL ~/.claude/settings.json 2>/dev/null | head -1 || echo '    (not set)'; echo '  Codex:' && grep base_url ~/.codex/config.toml 2>/dev/null | head -1 || echo '    (not set)'"
+echo [2/2] Verifying ...
+ssh -p %SVR_PORT% %SVR_USER%@%SVR_HOST% "python3 -c \"import json,os; d=json.load(open(os.path.expanduser('~/.claude/settings.json'))); print('  ANTHROPIC_BASE_URL:', d.get('env',{}).get('ANTHROPIC_BASE_URL','NOT SET')); print('  ANTHROPIC_MODEL:', d.get('env',{}).get('ANTHROPIC_MODEL','NOT SET'))\""
 
 echo.
 echo =============================================
