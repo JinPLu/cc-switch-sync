@@ -19,7 +19,7 @@
 | `1. SSH Connect.bat` | 连接服务器。首次使用时选「+ Add new server」，脚本会自动初始化远程环境（代理、工作目录、Claude/Codex 配置），然后直接连入 |
 | `2. Sync Config.bat` | 在 CC Switch 或 Codex 里切换 Provider 后，把新配置推送到服务器 |
 
-同步 Codex 时会覆盖远端 `~/.codex/config.toml`，并在覆盖前保留 `config.toml.bak.<timestamp>`；如果本机存在 `auth.json`，也会同步到远端并保留备份。
+同步 Codex 时会直接覆盖远端 `~/.codex/config.toml`；如果本机存在 `auth.json`，也会直接覆盖远端 `~/.codex/auth.json`。
 
 ## `servers.conf` 格式
 

@@ -19,7 +19,7 @@ Double-click a script to run it:
 | `1. SSH Connect.bat` | Connect to a server. First time: pick "+ Add new server" and the script will automatically initialize the remote environment (proxy, workdir, Claude/Codex config), then connect |
 | `2. Sync Config.bat` | After switching Provider in CC Switch or Codex, push the new config to the server |
 
-Codex sync overwrites remote `~/.codex/config.toml` after creating `config.toml.bak.<timestamp>`. If local `auth.json` exists, it is synced too and backed up before replacement.
+Codex sync directly overwrites remote `~/.codex/config.toml`. If local `auth.json` exists, it directly overwrites remote `~/.codex/auth.json` too.
 
 ## `servers.conf` format
 

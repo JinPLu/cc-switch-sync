@@ -144,7 +144,7 @@ if exist "!LOCAL_CODEX_CONFIG!" (
     ) else (
         echo   [WARN] Local Codex auth.json not found; syncing config.toml only.
     )
-    ssh -p !PORT! !USER!@!HOST! "mkdir -p ~/.codex; ts=$(date +%%Y%%m%%d_%%H%%M%%S); [ -f ~/.codex/config.toml ] && cp ~/.codex/config.toml ~/.codex/config.toml.bak.$ts; cp /tmp/cc-sync-codex-config.toml ~/.codex/config.toml; chmod 600 ~/.codex/config.toml; rm -f /tmp/cc-sync-codex-config.toml; if [ -f /tmp/cc-sync-codex-auth.json ]; then [ -f ~/.codex/auth.json ] && cp ~/.codex/auth.json ~/.codex/auth.json.bak.$ts; cp /tmp/cc-sync-codex-auth.json ~/.codex/auth.json; chmod 600 ~/.codex/auth.json; rm -f /tmp/cc-sync-codex-auth.json; fi; echo '  codex config synced'"
+    ssh -p !PORT! !USER!@!HOST! "mkdir -p ~/.codex; cp /tmp/cc-sync-codex-config.toml ~/.codex/config.toml; chmod 600 ~/.codex/config.toml; rm -f /tmp/cc-sync-codex-config.toml; if [ -f /tmp/cc-sync-codex-auth.json ]; then cp /tmp/cc-sync-codex-auth.json ~/.codex/auth.json; chmod 600 ~/.codex/auth.json; rm -f /tmp/cc-sync-codex-auth.json; fi; echo '  codex config synced'"
     if errorlevel 1 (
         echo   ERROR: Codex remote install failed.
         pause
