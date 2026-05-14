@@ -1,6 +1,6 @@
 # cc-switch-sync
 
-Companion scripts for [CC Switch](https://github.com/farion1231/cc-switch) — double-click to push your local Claude and Codex AI provider config to remote Linux servers.
+Companion scripts for [CC Switch](https://github.com/farion1231/cc-switch) — double-click to push your local Claude and Codex AI provider config to remote Linux servers, or download remote chat history back to your local machine.
 
 [中文](README.md)
 
@@ -18,8 +18,11 @@ Double-click a script to run it:
 |--------|--------------|
 | `1. SSH Connect.bat` | Connect to a server. First time: pick "+ Add new server" and the script will automatically initialize the remote environment (proxy, workdir, Claude/Codex config), then connect |
 | `2. Sync Config.bat` | After switching Provider in CC Switch or Codex, push the new config to the server |
+| `3. Download History.bat` | Download Claude/Codex chat history from a server into a local archive, with an optional JSONL-only import for CC Switch browsing |
 
 Codex sync directly overwrites remote `~/.codex/config.toml`. If local `auth.json` exists, it directly overwrites remote `~/.codex/auth.json` too.
+
+History downloads are saved to `%USERPROFILE%\.cc-switch-sync\history-downloads\<server>\<timestamp>` by default. The script does not overwrite local `auth.json`, `config.toml`, `settings.json`, or sqlite indexes. The optional import copies only Claude/Codex JSONL session files so CC Switch can scan them; official Codex/Claude `resume` indexes are not modified.
 
 ## `servers.conf` format
 
