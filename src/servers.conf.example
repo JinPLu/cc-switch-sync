@@ -1,5 +1,6 @@
 # AI Server list
-# Format follows ~/.ssh/config — add a new server by appending a new block
+# Format follows ~/.ssh/config. The app can create this file for you from
+# "Add Server", so copying this file is optional.
 
 Host lab-gpu
   HostName 10.x.x.x
@@ -7,6 +8,7 @@ Host lab-gpu
   User root
   WorkDir /home/user/projects/
   Proxy http://10.x.x.x:18000
+  IdentityFile C:\Users\you\.ssh\id_ed25519
 
 Host my-server
   HostName 10.x.x.x

@@ -6,7 +6,15 @@
 # Local server registry — contains real IPs/hostnames and proxy addresses
 servers.conf
 servers.json
+
+# Local state dirs (history downloads, user config)
 .cc-switch-sync/
+.cc-remote/
+.claude/
+
+# Release artifacts
+release/
+*.zip
 
 # OS junk
 .DS_Store
@@ -18,3 +26,7 @@ desktop.ini
 .idea/
 *.swp
 *~
+
+# Private AI assistant notes — not for upstream
+CLAUDE.md
+AGENTS.md

@@ -1,0 +1,520 @@
+#!/usr/bin/env bash
+# bin/cc-remote — CC Switch Remote Kit (cross-platform shell entry).
+# Mac/Linux: native. Windows: run via the root .bat launcher.
+
+set -u
+
+# Resolve install root regardless of where we're invoked from / symlinks.
+_ccr_resolve_root() {
+    local src="${BASH_SOURCE[0]}"
+    while [ -h "$src" ]; do
+        local dir; dir="$(cd -P "$(dirname "$src")" && pwd)"
+        src="$(readlink "$src")"
+        case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+    done
+    cd -P "$(dirname "$src")/.." && pwd
+}
+CCR_ROOT="${CCR_ROOT:-$(_ccr_resolve_root)}"
+export CCR_ROOT
+
+# Source libs.
+# shellcheck disable=SC1091
+for _f in term i18n config ssh plugin; do . "$CCR_ROOT/lib/${_f}.sh"; done
+unset _f
+
+ccr_load_config
+# Reload language now that config is parsed.
+CCR_LANG="$(_ccr_detect_lang)"
+
+# ----------------- server helpers -----------------
+
+ccr_print_server_list() {
+    ccr_read_servers
+    if [ "$CCR_SERVERS_COUNT" -eq 0 ]; then
+        ccr_status WARN "$(t no_servers)"
+        return 1
+    fi
+    local i=1
+    while [ "$i" -le "$CCR_SERVERS_COUNT" ]; do
+        ccr_select_server_by_index "$i"
+        local addr
+        addr="$(printf '%s@%s:%s' "$CCR_SRV_USER" "$CCR_SRV_HOST" "$CCR_SRV_PORT")"
+        local desc=""
+        [ -n "$CCR_SRV_WORKDIR" ] && desc="workdir=$CCR_SRV_WORKDIR"
+        ccr_list_item "$i" "$(printf '%s%s%s  %s%s%s' "$CCR_BOLD" "$CCR_SRV_NAME" "$CCR_RESET" "$CCR_DIM" "($addr)" "$CCR_RESET")" "$desc"
+        i=$((i+1))
+    done
+}
+
+# Prompt user to pick a server. Sets CCR_SRV_*. Returns 1 if cancelled.
+ccr_pick_server() {
+    local preset="${1:-}"
+    ccr_read_servers
+    if [ -n "$preset" ]; then
+        ccr_select_server_by_name "$preset" || { ccr_status ERR "Server '$preset' not found in servers.conf."; return 1; }
+        return 0
+    fi
+    if [ "$CCR_SERVERS_COUNT" -eq 0 ]; then
+        ccr_status WARN "$(t no_servers)"
+        cmd_add || return 1
+        ccr_read_servers
+        [ "$CCR_SERVERS_COUNT" -eq 0 ] && return 1
+    fi
+    if [ -n "${CFG_default_server:-}" ] && [ -z "$preset" ]; then
+        if ccr_select_server_by_name "$CFG_default_server"; then
+            return 0
+        fi
+    fi
+    while :; do
+        ccr_title "$(t servers_header)"
+        ccr_print_server_list
+        local add_n=$((CCR_SERVERS_COUNT + 1))
+        ccr_list_item "$add_n" "$(printf '%s+ Add new server%s' "$CCR_GREEN" "$CCR_RESET")"
+        ccr_list_item "0" "$(printf '%sBack%s' "$CCR_DIM" "$CCR_RESET")"
+        printf '\n  %s%s%s %s [0-%d] ' "$CCR_BRIGHT_CYAN" "$CCR_ICON_ARROW" "$CCR_RESET" "$(t select_prompt)" "$add_n"
+        local choice
+        IFS= read -r choice
+        choice="${choice%$'\r'}"
+        choice="${choice// /}"
+        case "$choice" in
+            0) return 1 ;;
+            "$add_n") cmd_add; ccr_read_servers; continue ;;
+            *)
+                case "$choice" in
+                    ''|*[!0-9]*) ccr_status ERR "$(t invalid_choice)"; continue ;;
+                esac
+                if [ "$choice" -ge 1 ] && [ "$choice" -le "$CCR_SERVERS_COUNT" ]; then
+                    ccr_select_server_by_index "$choice"
+                    return 0
+                fi
+                ccr_status ERR "$(t invalid_choice)"
+                ;;
+        esac
+    done
+}
+
+# ----------------- commands -----------------
+
+cmd_connect() {
+    ccr_pick_server "${1:-}" || return 0
+    ccr_title "$(t connect_target): $CCR_SRV_NAME"
+    ccr_kv "ssh" "$(printf 'ssh -p %s %s@%s' "$CCR_SRV_PORT" "$CCR_SRV_USER" "$CCR_SRV_HOST")"
+    printf '\n'
+    ccr_ssh_interactive
+}
+
+cmd_sync() {
+    ccr_load_plugins
+    ccr_pick_server "${1:-}" || return 0
+    ccr_title "Sync Provider Config" "$CCR_SRV_NAME ($CCR_SRV_USER@$CCR_SRV_HOST:$CCR_SRV_PORT)"
+
+    # Plan summary.
+    printf '\n  %sPlan:%s\n' "$CCR_BOLD" "$CCR_RESET"
+    local p
+    for p in $CCR_PLUGIN_LIST; do
+        local line
+        line=$(ccr_plugin_call "$p" sync --summary 2>/dev/null || true)
+        [ -n "$line" ] && printf '    %s%s%s %s\n' "$CCR_DIM" "$CCR_ICON_DOT" "$CCR_RESET" "$line"
+    done
+
+    if ! ccr_confirm "$(t sync_starting)?" 1; then
+        ccr_status SKIP "$(t cancelled)"
+        return 0
+    fi
+
+    local rc=0
+    for p in $CCR_PLUGIN_LIST; do
+        printf '\n  %s%s%s %s\n' "$(ccr_color_for_plugin "$p")" "$CCR_ICON_DOT" "$CCR_RESET" \
+            "$(ccr_plugin_title "$p")"
+        if ! ccr_plugin_call "$p" sync; then
+            rc=1
+        fi
+    done
+    printf '\n'
+    if [ "$rc" = "0" ]; then
+        ccr_status OK "$(t sync_done): $CCR_SRV_NAME"
+    else
+        ccr_status ERR "$(t sync_done): $CCR_SRV_NAME (some plugins failed)"
+    fi
+    return $rc
+}
+
+cmd_add() {
+    ccr_title "$(t add_server_title)"
+
+    # Show current servers if any.
+    ccr_read_servers
+    if [ "$CCR_SERVERS_COUNT" -gt 0 ]; then
+        printf '  %sCurrent servers:%s\n' "$CCR_DIM" "$CCR_RESET"
+        local i=1
+        while [ "$i" -le "$CCR_SERVERS_COUNT" ]; do
+            local n; eval "n=\$CCR_SRV_${i}_NAME"
+            printf '    %s- %s%s\n' "$CCR_DIM" "$n" "$CCR_RESET"
+            i=$((i+1))
+        done
+        printf '\n'
+    fi
+
+    local name host port user workdir proxy identity
+    ccr_prompt name    "Name (e.g. lab-gpu)"
+    [ -z "$name" ] && { ccr_status SKIP "$(t cancelled)"; return 0; }
+    ccr_prompt host    "HostName / IP"
+    [ -z "$host" ] && { ccr_status ERR "HostName is required."; return 1; }
+    ccr_prompt port    "Port" "22"
+    ccr_prompt user    "User" "root"
+    ccr_prompt workdir "WorkDir" "~"
+    ccr_prompt proxy   "Proxy (empty if none)"
+    ccr_prompt identity "IdentityFile (empty if default SSH key)"
+
+    printf '\n  %sPreview:%s\n' "$CCR_BOLD" "$CCR_RESET"
+    ccr_kv "Host"        "$name"
+    ccr_kv "HostName"    "$host"
+    ccr_kv "Port"        "$port"
+    ccr_kv "User"        "$user"
+    ccr_kv "WorkDir"     "$workdir"
+    [ -n "$proxy" ]    && ccr_kv "Proxy"        "$proxy"
+    [ -n "$identity" ] && ccr_kv "IdentityFile" "$identity"
+    printf '\n'
+
+    if ! ccr_confirm "Save this server profile?" 1; then
+        ccr_status SKIP "$(t cancelled)"
+        return 0
+    fi
+
+    ccr_append_server "$name" "$host" "$port" "$user" "$workdir" "$proxy" "$identity"
+    ccr_status OK "Saved to servers.conf."
+
+    if [ "${CCR_SKIP_ADD_INIT:-0}" != "1" ] && ccr_confirm "Initialize this server now?" 1; then
+        ccr_read_servers
+        ccr_select_server_by_name "$name"
+        cmd_init
+    fi
+}
+
+cmd_test_ssh() {
+    ccr_pick_server "${1:-}" || return 1
+    ccr_title "Test SSH: $CCR_SRV_NAME"
+    ccr_kv "Target" "$(printf '%s@%s:%s' "$CCR_SRV_USER" "$CCR_SRV_HOST" "$CCR_SRV_PORT")"
+    printf '\n'
+    ccr_status WORK "Testing SSH connection..."
+    ccr_remote "true" || {
+        ccr_status ERR "SSH test failed. Check host, port, user, key/password, firewall, or proxy."
+        return 1
+    }
+    ccr_status OK "SSH connection works."
+}
+
+cmd_init() {
+    ccr_title "Initialize Server: $CCR_SRV_NAME"
+    printf '  This will:\n'
+    printf '    %s%s%s Test SSH before changing anything\n' "$CCR_DIM" "$CCR_ICON_DOT" "$CCR_RESET"
+    printf '    %s%s%s Back up remote ~/.bashrc\n' "$CCR_DIM" "$CCR_ICON_DOT" "$CCR_RESET"
+    printf '    %s%s%s Update only the CC Switch Remote Kit managed block\n' "$CCR_DIM" "$CCR_ICON_DOT" "$CCR_RESET"
+    printf '    %s%s%s Sync provider config via enabled plugins\n' "$CCR_DIM" "$CCR_ICON_DOT" "$CCR_RESET"
+    printf '\n'
+    if ! ccr_confirm "Continue with remote initialization?" 1; then
+        ccr_status SKIP "$(t cancelled)"
+        return 0
+    fi
+    ccr_status WORK "Testing SSH connection..."
+    ccr_remote "true" || {
+        ccr_status ERR "SSH test failed; remote initialization skipped."
+        return 1
+    }
+    local proxy_q workdir_q
+    proxy_q="$(ccr_quote_remote "$CCR_SRV_PROXY")"
+    workdir_q="$(ccr_quote_remote "$CCR_SRV_WORKDIR")"
+    local remote
+    remote=$(cat <<EOSH
+set -e
+command -v python3 >/dev/null || { echo 'python3 is required for initialization'; exit 1; }
+ts=\$(date +%Y%m%d_%H%M%S)
+cp ~/.bashrc ~/.bashrc.cc-switch-remote-kit.\$ts.bak 2>/dev/null || touch ~/.bashrc
+python3 - <<'PY'
+from pathlib import Path
+path = Path.home() / '.bashrc'
+text = path.read_text() if path.exists() else ''
+start = '# >>> cc-switch-remote-kit >>>'
+end = '# <<< cc-switch-remote-kit <<<'
+proxy = ${proxy_q}
+workdir = ${workdir_q}
+lines = [start]
+if proxy:
+    lines += [f'export http_proxy={proxy}', f'export https_proxy={proxy}']
+if workdir:
+    lines += [f'cd {workdir}']
+lines += [end, '']
+block = '\n'.join(lines)
+if start in text and end in text:
+    before = text.split(start, 1)[0].rstrip()
+    after = text.split(end, 1)[1].lstrip()
+    text = before + '\n\n' + block + after
+else:
+    text = text.rstrip() + '\n\n' + block
+path.write_text(text)
+PY
+echo 'managed bashrc block updated'
+EOSH
+)
+    ccr_spin "Updating remote ~/.bashrc managed block" ccr_remote "$remote" || return $?
+    cmd_sync "$CCR_SRV_NAME"
+}
+
+cmd_setup() {
+    ccr_load_plugins
+    ccr_logo
+    ccr_title "First-time Setup"
+    printf '  CC Switch Remote is installed. To finish setup, add a Linux server, test SSH,\n'
+    printf '  then confirm remote initialization and provider config sync.\n\n'
+    printf '  You need: host/IP, port, username, and a working SSH key or password.\n\n'
+
+    if ccr_confirm "Run local environment check now?" 1; then
+        cmd_doctor
+        printf '\n'
+    fi
+
+    ccr_read_servers
+    if [ "$CCR_SERVERS_COUNT" -eq 0 ]; then
+        ccr_status WARN "No server profiles yet."
+        if ! ccr_confirm "Add your first server now?" 1; then
+            ccr_status SKIP "Setup stopped. You can run 'cc-remote setup' later."
+            return 0
+        fi
+        CCR_SKIP_ADD_INIT=1 cmd_add
+        ccr_read_servers
+        [ "$CCR_SERVERS_COUNT" -eq 0 ] && return 0
+    fi
+
+    ccr_pick_server "${1:-}" || return 0
+    printf '\n'
+    if ccr_confirm "Test SSH and run remote initialization for '$CCR_SRV_NAME'?" 1; then
+        cmd_init
+    else
+        ccr_status SKIP "Remote initialization skipped."
+    fi
+    printf '\n'
+    ccr_status OK "Setup flow complete. Next time, double-click '打开 CC Switch Remote.bat' or run 'cc-remote'."
+}
+
+cmd_history() {
+    ccr_load_plugins
+    ccr_pick_server "${1:-}" || return 0
+    ccr_title "Download History" "$CCR_SRV_NAME"
+
+    local include_codex="${CFG_history_include_codex:-false}"
+    if [ "${CCR_ASSUME_YES:-0}" != "1" ]; then
+        if ccr_confirm "Include Codex history in this download?" 0; then
+            include_codex="true"
+        else
+            include_codex="false"
+        fi
+    fi
+    export CCR_HISTORY_INCLUDE_CODEX="$include_codex"
+
+    # Collect remote paths from each plugin.
+    local paths=""
+    local p line
+    for p in $CCR_PLUGIN_LIST; do
+        if ccr_plugin_has "$p" history_paths; then
+            while IFS= read -r line; do
+                [ -n "$line" ] && paths="$paths $line"
+            done < <(ccr_plugin_call "$p" history_paths)
+        fi
+    done
+    paths="$(printf '%s' "$paths" | sed 's/^[[:space:]]*//')"
+    if [ -z "$paths" ]; then
+        ccr_status WARN "No history paths declared by any plugin; nothing to download."
+        return 0
+    fi
+
+    local ts; ts="$(date +%Y%m%d_%H%M%S)"
+    local dest="$CCR_HISTORY_DIR/$CCR_SRV_NAME/$ts"
+    mkdir -p "$dest"
+    local local_tar="$dest/history.tar.gz"
+    local remote_tar="/tmp/cc-switch-history-$ts.tar.gz"
+
+    ccr_kv "Archive folder" "$dest"
+    printf '\n'
+
+    local remote_cmd
+    remote_cmd="set -e; cd ~; rm -f '$remote_tar'; tar --ignore-failed-read -czf '$remote_tar' $paths 2>/tmp/cc-switch-history-tar.err || true; if [ -f '$remote_tar' ]; then ls -lh '$remote_tar'; else cat /tmp/cc-switch-history-tar.err; exit 1; fi"
+    ccr_spin "Creating remote tarball" ccr_remote "$remote_cmd" || return $?
+    ccr_spin "Downloading archive" ccr_download "$remote_tar" "$local_tar" || return $?
+    ccr_remote "rm -f '$remote_tar'" >/dev/null 2>&1 || ccr_status WARN "Remote temp cleanup failed."
+
+    # Extract locally.
+    ccr_spin "Extracting archive" tar -xzf "$local_tar" -C "$dest" || return $?
+    ccr_status OK "History downloaded: $dest"
+    printf '  %sLocal auth/config/settings/sqlite files are NOT overwritten.%s\n' "$CCR_DIM" "$CCR_RESET"
+
+    if ccr_confirm "Import JSONL session files into local active folders?" 0; then
+        cmd_history_import "$dest" "$include_codex"
+    fi
+}
+
+cmd_history_import() {
+    local src="$1"
+    local include_codex="$2"
+    if ! command -v rsync >/dev/null 2>&1; then
+        ccr_status ERR "rsync not found; cannot import. (Mac/Linux: built-in; Git Bash: install via 'pacman -S rsync' or skip.)"
+        return 1
+    fi
+    _copy() {
+        local from="$1" to="$2"
+        [ -d "$from" ] || return 0
+        mkdir -p "$to"
+        rsync -a --ignore-existing "$from"/ "$to"/ >/dev/null
+    }
+    _copy "$src/.claude/projects"            "$HOME/.claude/projects"
+    _copy "$src/.claude/sessions"            "$HOME/.claude/sessions"
+    if [ "$include_codex" = "true" ]; then
+        _copy "$src/.codex/sessions"          "$HOME/.codex/sessions"
+        _copy "$src/.codex/archived_sessions" "$HOME/.codex/archived_sessions"
+    fi
+    ccr_status OK "Import complete. Official resume indexes were not modified."
+}
+
+cmd_doctor() {
+    ccr_load_plugins
+    ccr_title "Environment Check"
+    # Local tools.
+    local cmd
+    for cmd in ssh scp tar python3; do
+        if command -v "$cmd" >/dev/null 2>&1; then
+            ccr_status OK "$cmd found ($(command -v "$cmd"))"
+        else
+            ccr_status ERR "$cmd not found."
+        fi
+    done
+
+    # Plugin local-state checks.
+    printf '\n  %sPlugins:%s\n' "$CCR_BOLD" "$CCR_RESET"
+    if [ -z "$CCR_PLUGIN_LIST" ]; then
+        ccr_status WARN "No plugins enabled. Edit ~/.cc-remote/config.ini -> enable_plugins=..."
+    else
+        local p
+        for p in $CCR_PLUGIN_LIST; do
+            printf '\n  %s[%s]%s\n' "$(ccr_color_for_plugin "$p")" "$(ccr_plugin_title "$p")" "$CCR_RESET"
+            ccr_plugin_call "$p" doctor || true
+        done
+    fi
+
+    # Servers.
+    printf '\n  %sServers:%s\n' "$CCR_BOLD" "$CCR_RESET"
+    ccr_read_servers
+    if [ "$CCR_SERVERS_COUNT" -gt 0 ]; then
+        ccr_status OK "$CCR_SERVERS_COUNT server profile(s) found."
+        ccr_print_server_list
+    else
+        ccr_status WARN "No servers configured. Use 'Add server' from the menu."
+    fi
+}
+
+cmd_settings() {
+    ccr_title "Settings"
+    ccr_kv "Config file" "$CCR_CONFIG_FILE"
+    printf '\n'
+    local key
+    for key in language theme icon_set default_server sync_codex sync_codex_auth history_include_codex enable_plugins; do
+        local v; eval "v=\${CFG_${key}:-}"
+        ccr_kv "$key" "${v:-<empty>}"
+    done
+    printf '\n'
+    if ccr_confirm "Create default config.ini if missing?" 1; then
+        if [ -f "$CCR_CONFIG_FILE" ]; then
+            ccr_status SKIP "config.ini already exists."
+        else
+            ccr_ensure_config_file
+            ccr_status OK "Default config.ini created."
+        fi
+    fi
+}
+
+cmd_list() {
+    ccr_title "Servers"
+    ccr_print_server_list || true
+}
+
+# ----------------- main menu -----------------
+
+show_menu() {
+    local first=1
+    while :; do
+        if [ "$first" = "1" ]; then
+            ccr_logo
+            first=0
+        else
+            printf '\n'
+            ccr_rule '─' "$CCR_GRAY"
+            printf '\n'
+        fi
+        ccr_menu "$(t menu_title)" "" \
+            "1:First-time setup / Add server" \
+            "2:$(t menu_connect)" \
+            "3:$(t menu_sync)" \
+            "4:$(t menu_history)" \
+            "5:$(t menu_list)" \
+            "6:$(t menu_doctor)" \
+            "7:$(t menu_settings)" \
+            "0:$(t menu_exit)"
+        case "$CCR_MENU_CHOICE" in
+            1) cmd_setup;   ccr_pause ;;
+            2) cmd_connect; ccr_pause ;;
+            3) cmd_sync;    ccr_pause ;;
+            4) cmd_history; ccr_pause ;;
+            5) cmd_list;    ccr_pause ;;
+            6) cmd_doctor;  ccr_pause ;;
+            7) cmd_settings; ccr_pause ;;
+            0|q|exit) return 0 ;;
+            *) ccr_status ERR "$(t invalid_choice)"; ccr_pause ;;
+        esac
+    done
+}
+
+# ----------------- arg parsing -----------------
+
+usage() {
+    cat <<EOF
+Usage: cc-remote [command] [server-name]
+
+Commands:
+  (no arg)         Open interactive menu
+  menu             Same as no arg
+  setup            First-time setup wizard
+  connect [NAME]   SSH into a server
+  sync [NAME]      Sync provider config to a server
+  history [NAME]   Download session history from a server
+  add              Add a new server interactively
+  test [NAME]      Test SSH connection
+  list             List configured servers
+  doctor           Check local environment + plugin state
+  settings         Show / write config.ini
+
+Flags (env vars):
+  CCR_ASSUME_YES=1     Skip all confirmation prompts
+  CCR_LANGUAGE=zh|en   Override UI language
+  CCR_THEME=plain      Disable colors (or set NO_COLOR=1)
+  CCR_ICON_SET=ascii   Force ASCII icons
+EOF
+}
+
+main() {
+    local action="${1:-menu}"
+    [ "$#" -gt 0 ] && shift
+    case "$action" in
+        ""|menu)     show_menu ;;
+        setup|first-run) cmd_setup "${1:-}" ;;
+        connect)     cmd_connect "${1:-}" ;;
+        sync)        cmd_sync    "${1:-}" ;;
+        history)     cmd_history "${1:-}" ;;
+        add|add-server) cmd_add ;;
+        test|test-ssh) cmd_test_ssh "${1:-}" ;;
+        list|list-servers) cmd_list ;;
+        doctor)      cmd_doctor ;;
+        settings)    cmd_settings ;;
+        -h|--help|help) usage ;;
+        *) ccr_status ERR "Unknown command: $action"; usage; exit 2 ;;
+    esac
+}
+
+main "$@"
