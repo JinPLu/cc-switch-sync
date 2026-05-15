@@ -47,7 +47,11 @@ ccr_download() {
 ccr_ssh_interactive() {
     local _args
     _ccr_read_args _args _ccr_ssh_args
-    ssh "${_args[@]}"
+    if [ -n "$CCR_SRV_WORKDIR" ] && [ "$CCR_SRV_WORKDIR" != "~" ]; then
+        ssh "${_args[@]}" -t "cd $(ccr_quote_remote "$CCR_SRV_WORKDIR") && exec \$SHELL -l"
+    else
+        ssh "${_args[@]}"
+    fi
 }
 
 ccr_quote_remote() {
