@@ -1,8 +1,8 @@
 # install.ps1 — one-line Windows installer.
-#   irm https://raw.githubusercontent.com/farion1231/cc-switch-sync/main/src/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/JinPLu/cc-switch-sync/main/src/install.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
-$Repo       = if ($env:CCR_REPO)        { $env:CCR_REPO }        else { 'https://github.com/farion1231/cc-switch-sync.git' }
+$Repo       = if ($env:CCR_REPO)        { $env:CCR_REPO }        else { 'https://github.com/JinPLu/cc-switch-sync.git' }
 $Branch     = if ($env:CCR_BRANCH)      { $env:CCR_BRANCH }      else { 'main' }
 $InstallDir = if ($env:CCR_INSTALL_DIR) { $env:CCR_INSTALL_DIR } else { Join-Path $env:USERPROFILE '.cc-remote' }
 
@@ -42,7 +42,7 @@ if ($LocalSource -and ($LocalSource -ne $InstallDir)) {
         New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     }
     # Copy needed contents (avoid copying junk like .git if present).
-    $items = @('src', '安装 Windows.bat', '安装 macOS.command', '打开 CC Switch Remote.bat', '使用说明.md')
+    $items = @('src', '安装 Windows.bat', '安装 macOS.command', '打开 CC Switch Remote.bat', '使用说明.md', 'README.md')
     foreach ($it in $items) {
         $src = Join-Path $LocalSource $it
         if (Test-Path $src) { Copy-Item -LiteralPath $src -Destination $InstallDir -Recurse -Force }

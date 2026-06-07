@@ -26,9 +26,18 @@ if [ -z "$BIN" ]; then
     exit 0
 fi
 
+BIN_ESCAPED="$(printf '%s' "$BIN" | sed 's/[\"\\$`]/\\&/g')"
 cat > "$TARGET" <<EOF
-#!/bin/bash
-exec "$BIN"
+#!/usr/bin/env bash
+export PATH="/opt/homebrew/bin:/usr/local/bin:\$HOME/.local/bin:\$PATH"
+BIN="$BIN_ESCAPED"
+if [ ! -x "\$BIN" ]; then
+    printf '[ERROR] cc-remote not found: %s\n' "\$BIN" >&2
+    printf '\nPress Enter to close...'
+    IFS= read -r _ || true
+    exit 1
+fi
+exec "\$BIN" menu
 EOF
 chmod +x "$TARGET"
 echo "Shortcut: $TARGET"

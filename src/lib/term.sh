@@ -76,7 +76,7 @@ CCR_TERM_W=$(tput cols 2>/dev/null || echo 80)
 [ "$CCR_TERM_W" -lt 40 ]  && CCR_TERM_W=40
 CCR_RULE_LINE=""
 _i=0
-while [ $_i -lt $CCR_TERM_W ]; do CCR_RULE_LINE="$CCR_RULE_LINE─"; _i=$((_i+1)); done
+while [ $_i -lt $CCR_TERM_W ]; do CCR_RULE_LINE="${CCR_RULE_LINE}─"; _i=$((_i+1)); done
 unset _i
 
 ccr_rule() {

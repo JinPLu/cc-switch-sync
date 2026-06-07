@@ -293,7 +293,7 @@ cmd_setup() {
         ccr_status SKIP "Remote initialization skipped."
     fi
     printf '\n'
-    ccr_status OK "Setup flow complete. Next time, double-click '打开 CC Switch Remote.bat' or run 'cc-remote'."
+    ccr_status OK "Setup flow complete. Next time, double-click 'CC Switch Remote' or run 'cc-remote'."
 }
 
 cmd_history() {

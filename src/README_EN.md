@@ -16,12 +16,15 @@ The installer creates a `CC Switch Remote` Desktop shortcut and opens the first-
 Developer one-liners:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/farion1231/cc-switch-sync/main/src/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/JinPLu/cc-switch-sync/main/src/install.sh | bash
 ```
 
 ```powershell
-irm https://raw.githubusercontent.com/farion1231/cc-switch-sync/main/src/install.ps1 | iex
+irm https://raw.githubusercontent.com/JinPLu/cc-switch-sync/main/src/install.ps1 | iex
 ```
+
+On macOS, the installer also creates `~/Desktop/CC Switch Remote.command` and
+adds `cc-remote` to common zsh/bash profile files so new terminals can run it.
 
 ## Usage
 
@@ -46,4 +49,5 @@ cc-remote history [name] # download session history
 
 ## Plugins
 
-Plugin docs: `src/plugins/README.md`.
+Plugins are intentionally small shell files with `doctor`, `sync`, and optional
+`history_paths` hooks. Plugin docs: `src/plugins/README.md`.

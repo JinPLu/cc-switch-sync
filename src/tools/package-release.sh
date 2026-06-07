@@ -14,6 +14,7 @@ rm -rf "$STAGING" "$ARCHIVE" "$ZIP"
 mkdir -p "$STAGING"
 
 INCLUDE=(
+    README.md
     src
     "安装 Windows.bat"
     "安装 macOS.command"
@@ -29,7 +30,12 @@ for item in "${INCLUDE[@]}"; do
 done
 
 # Ensure shell scripts are executable.
-chmod +x "$STAGING/src/bin/cc-remote" "$STAGING/src/install.sh" "$STAGING/安装 macOS.command" 2>/dev/null || true
+chmod +x \
+    "$STAGING/src/bin/cc-remote" \
+    "$STAGING/src/install.sh" \
+    "$STAGING/src/tools/create-shortcut.sh" \
+    "$STAGING/src/tools/package-release.sh" \
+    "$STAGING/安装 macOS.command" 2>/dev/null || true
 
 # Build archives.
 tar -czf "$ARCHIVE" -C "$ROOT/release" "cc-switch-remote-kit-$VERSION"
